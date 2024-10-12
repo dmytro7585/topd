@@ -1,1 +1,0 @@
-/usr/bin/cc -O3 -DNDEBUG CMakeFiles/topd.dir/main.c.o CMakeFiles/topd.dir/linux.c.o -o bin/topd 
