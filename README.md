@@ -19,12 +19,12 @@ cmake --build .
 ```
 3. Launching the program
 ```
-./topd
+./topd_v1.0
 ```
 4. An example of a launch with options: (This command will run the daemon and log CPU information and current time.)
 
 ```
-./topd -t -c
+./topd_v1.0 -t -c
 ```
 
 5. Cleaning

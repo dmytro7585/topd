@@ -1,0 +1,1 @@
+/usr/bin/cc CMakeFiles/topd_v1.0.dir/main.c.o CMakeFiles/topd_v1.0.dir/linux.c.o -o topd_v1.0 

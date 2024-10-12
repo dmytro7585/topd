@@ -1,0 +1,7 @@
+/home/dmytro/topd/build/CMakeFiles/topd_v1.0.dir
+/home/dmytro/topd/build/CMakeFiles/edit_cache.dir
+/home/dmytro/topd/build/CMakeFiles/rebuild_cache.dir
+/home/dmytro/topd/build/CMakeFiles/list_install_components.dir
+/home/dmytro/topd/build/CMakeFiles/install.dir
+/home/dmytro/topd/build/CMakeFiles/install/local.dir
+/home/dmytro/topd/build/CMakeFiles/install/strip.dir
