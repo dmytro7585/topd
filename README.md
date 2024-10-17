@@ -10,27 +10,39 @@ CMake
 
 1. Cloning the repository:
 ```
-git clone https://github.com/your-username/topd.git
+git clone https://github.com/dmytro7585/topd.git
 cd topd
 ```
 2. Building
 ```
+mkdir build         
+cd build
 cmake --build .
 ```
-3. Launching the program
+3. Installing the program
 ```
-./topd_v1.0
+sudo make install
 ```
-4. An example of a launch with options: (This command will run the daemon and log CPU information and current time.)
+4. Launching the program
+```
+topd
+```
+5. An example of a launch with options: (This command will run the daemon and log CPU information and current time.)
 
 ```
-./topd_v1.0 -t -c
+topd -t -c
 ```
 
-5. Cleaning
+6. Cleaning
 To remove the generated files (object files and executable files), use the clean command:
 ```
+cd build
 make clean
+```
+7. Uninstalling the program.
+```
+cd build
+sudo make uninstall
 ```
 ### Options:
 ```
