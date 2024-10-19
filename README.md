@@ -25,12 +25,12 @@ sudo make install
 ```
 4. Launching the program
 ```
-topd
+sudo topd
 ```
 5. An example of a launch with options: (This command will run the daemon and log CPU information and current time.)
 
 ```
-topd -t -c
+sudo topd -t -c
 ```
 
 6. Cleaning

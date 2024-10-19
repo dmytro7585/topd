@@ -28,12 +28,9 @@ void log_to_file(const char *message)
 
 void create_daemon()
 {
-    pid_t pid, sid;
-
     FILE *pid_file = fopen(PID_FILE, "r");
     if (pid_file != NULL) 
     {
-
         pid_t existing_pid;
         if (fscanf(pid_file, "%d", &existing_pid) != 1) 
         {
@@ -47,42 +44,20 @@ void create_daemon()
         {
             fprintf(stderr, "Демон вже працює (PID: %d)\n", existing_pid);
             exit(EXIT_FAILURE);
-        } else 
+        } 
+        else 
         {
-
             unlink(PID_FILE);
         }
     }
-  
-    pid = fork();
-    if (pid < 0) 
+
+    // Використовуємо функцію daemon(), яка робить більшість роботи за нас
+    if (daemon(0, 0) == -1) 
     {
         exit(EXIT_FAILURE);
     }
 
-    if (pid > 0) 
-    {
-        exit(EXIT_SUCCESS);
-    }
-
-    sid = setsid();
-    if (sid < 0)
-    {
-        exit(EXIT_FAILURE);
-    }
-
-    if ((chdir("/")) < 0) 
-    {
-        exit(EXIT_FAILURE);
-    }
-
-    close(STDIN_FILENO);
-    close(STDOUT_FILENO);
-    close(STDERR_FILENO);
-    open("/dev/null", O_RDONLY); 
-    open("/dev/null", O_RDWR);   
-    open("/dev/null", O_RDWR);   
-
+    // Записуємо PID демона у файл
     pid_file = fopen(PID_FILE, "w");
     if (pid_file == NULL) 
     {
@@ -91,6 +66,7 @@ void create_daemon()
     fprintf(pid_file, "%d\n", getpid());
     fclose(pid_file);
 }
+
 
 void print_current_datetime(char *buffer, size_t size) 
 {
