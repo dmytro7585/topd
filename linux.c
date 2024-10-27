@@ -5,7 +5,7 @@
 #include <unistd.h>
 #include <sys/statvfs.h>
 
-int get_number_of_cores() 
+int get_number_of_cores(void) 
 {
     long cores = sysconf(_SC_NPROCESSORS_ONLN);
     return (int)cores;
@@ -118,41 +118,41 @@ int get_cpu_name(char *name, size_t length)
     return -1;
 }
 
-CPUInfo get_cpu_info() 
+void get_cpu_info(CPUInfo * info)
 {
-    CPUInfo cpu_info = {0};  
+    memset(info, 0, sizeof(CPUInfo));
 
-    
-    if (get_cpu_name(cpu_info.name, sizeof(cpu_info.name)) != 0) {
+    if (get_cpu_name(info->name, sizeof(info->name)) != 0) 
+    {
         fprintf(stderr, "Помилка при отриманні назви процесора\n");
     }
 
-    
-    cpu_info.num_cores = get_number_of_cores();
-    if (cpu_info.num_cores < 0) {
+    info->num_cores = get_number_of_cores();
+    if (info->num_cores < 0) 
+    {
         fprintf(stderr, "Помилка при отриманні кількості ядер процесора\n");
     }
 
-    
-    for (int i = 0; i < cpu_info.num_cores; ++i) {
-        cpu_info.frequencies[i] = get_cpu_frequency(i);
-        cpu_info.usages[i] = get_cpu_usage(i);
-        
-        if (cpu_info.frequencies[i] < 0 || cpu_info.usages[i] < 0) {
+    for (int i = 0; i < info->num_cores; ++i) 
+    {
+        info->frequencies[i] = get_cpu_frequency(i);
+        info->usages[i] = get_cpu_usage(i);
+
+        if (info->frequencies[i] < 0 || info->usages[i] < 0) 
+        {
             fprintf(stderr, "Помилка при отриманні інформації про ядро %d\n", i);
         }
     }
-
-    return cpu_info;
 }
 
-MemoryInfo get_memory_info() {
-    MemoryInfo memory_info = {0};  
+void get_memory_info(MemoryInfo * info)
+{
+    memset(info, 0, sizeof(MemoryInfo));
 
     FILE *file = fopen("/proc/meminfo", "r");
-    if (file == NULL) {
+    if (file == NULL) 
+    {
         perror("Не вдалося відкрити /proc/meminfo");
-        return memory_info;  
     }
 
     long mem_total = 0;
@@ -161,7 +161,8 @@ MemoryInfo get_memory_info() {
     long cached = 0;
 
     char line[256];
-    while (fgets(line, sizeof(line), file)) {
+    while (fgets(line, sizeof(line), file))
+     {
         if (sscanf(line, "MemTotal: %ld kB", &mem_total) == 1 ||
             sscanf(line, "MemFree: %ld kB", &mem_free) == 1 ||
             sscanf(line, "Buffers: %ld kB", &buffers) == 1 ||
@@ -172,50 +173,45 @@ MemoryInfo get_memory_info() {
 
     fclose(file);
 
-    if (mem_total == 0) {
+    if (mem_total == 0)
+     {
         fprintf(stderr, "Не вдалося знайти інформацію про загальну пам'ять\n");
-        return memory_info;  
     }
 
-   
-    memory_info.total_memory = mem_total;  
-    memory_info.used_memory = mem_total - mem_free - buffers - cached;  
+    info->total_memory = mem_total;  
+    info->used_memory = mem_total - mem_free - buffers - cached;  
 
-    return memory_info;  
 }
 
-GPUInfo get_gpu_info() 
+void get_gpu_info(GPUInfo *info)
 {
-    GPUInfo gpu_info = {0}; 
+    memset(info, 0, sizeof(GPUInfo));
 
-    
     FILE *fp = popen("nvidia-smi --query-gpu=name,utilization.gpu --format=csv,noheader,nounits", "r");
-    if (fp == NULL) {
+    if (fp == NULL) 
+    {
         perror("Не вдалося запустити nvidia-smi");
-        return gpu_info;  
+        return;  
     }
 
-  
     char buffer[256];
-    if (fgets(buffer, sizeof(buffer), fp) != NULL) {
-        
+    if (fgets(buffer, sizeof(buffer), fp) != NULL) 
+    {
         char utilization[16];
-        sscanf(buffer, "%[^,], %s", gpu_info.name, utilization); 
+        
+        sscanf(buffer, "%[^,], %15s", info->name, utilization); 
 
-      
-        if (sscanf(utilization, "%f", &gpu_info.usage) != 1) {
+        if (sscanf(utilization, "%f", &info->usage) != 1)
+        {
             fprintf(stderr, "Не вдалося зчитати використання GPU\n");
-            pclose(fp);
-            return gpu_info; 
         }
-    } else {
+    } 
+    else 
+    {
         fprintf(stderr, "Не вдалося отримати інформацію про GPU\n");
-        pclose(fp);
-        return gpu_info;  
     }
 
     pclose(fp);
-    return gpu_info; 
 }
 
 double get_system_uptime() 

@@ -51,13 +51,11 @@ void create_daemon()
         }
     }
 
-    // Використовуємо функцію daemon(), яка робить більшість роботи за нас
     if (daemon(0, 0) == -1) 
     {
         exit(EXIT_FAILURE);
     }
 
-    // Записуємо PID демона у файл
     pid_file = fopen(PID_FILE, "w");
     if (pid_file == NULL) 
     {
@@ -86,7 +84,8 @@ void print_current_datetime(char *buffer, size_t size)
 
 void print_cpu_info(char *buffer, size_t size) 
 {
-    CPUInfo cpu_info = get_cpu_info();  
+    CPUInfo cpu_info;
+    get_cpu_info(&cpu_info);  
 
     snprintf(buffer + strlen(buffer), size - strlen(buffer), "CPU Info:\n%s\nCores(%d):\n", 
              cpu_info.name, cpu_info.num_cores);
@@ -99,6 +98,34 @@ void print_cpu_info(char *buffer, size_t size)
     }
     snprintf(buffer + strlen(buffer), size - strlen(buffer), "\n");
 }
+
+void print_memory_info(char *buffer, size_t size) 
+{
+    MemoryInfo memory_info;
+    get_memory_info(&memory_info);
+
+    double total_memory_gb = memory_info.total_memory / (1024.0 * 1024.0);
+    double used_memory_gb = memory_info.used_memory / (1024.0 * 1024.0);
+    double used_percentage = (memory_info.used_memory / (double)memory_info.total_memory) * 100.0;
+
+    
+    snprintf(buffer + strlen(buffer), size - strlen(buffer), "RAM Info:\n");
+    snprintf(buffer + strlen(buffer), size - strlen(buffer), 
+             "   Total: %.2f GB\n   Used: %.2f GB (%.0f%%)\n\n", 
+             total_memory_gb, used_memory_gb, used_percentage);
+}
+
+void print_gpu_info_to_buffer(char *buffer, size_t size) 
+{
+    GPUInfo gpu_info; 
+    get_gpu_info(&gpu_info);
+
+    snprintf(buffer + strlen(buffer), size - strlen(buffer), "GPU Info:\n");
+    snprintf(buffer + strlen(buffer), size - strlen(buffer), 
+             "   Name: %s\n   Usage: %.0f%%\n\n", 
+             gpu_info.name, gpu_info.usage);
+}
+
 
 void print_system_uptime(char *buffer, size_t size) 
 {
@@ -154,33 +181,6 @@ void print_internet_speed(char *buffer, size_t size)
     
     snprintf(buffer + strlen(buffer), size - strlen(buffer), "Internet Speed:\nPing: %s\nDownload: %s\nUpload: %s\n\n",
              speed_info.ping, speed_info.download, speed_info.upload);
-}
-
-void print_memory_info(char *buffer, size_t size) 
-{
-    MemoryInfo memory_info = get_memory_info();  
-
-    
-    double total_memory_gb = memory_info.total_memory / (1024.0 * 1024.0);
-    double used_memory_gb = memory_info.used_memory / (1024.0 * 1024.0);
-    double used_percentage = (memory_info.used_memory / (double)memory_info.total_memory) * 100.0;
-
-    
-    snprintf(buffer + strlen(buffer), size - strlen(buffer), "RAM Info:\n");
-    snprintf(buffer + strlen(buffer), size - strlen(buffer), 
-             "   Total: %.2f GB\n   Used: %.2f GB (%.0f%%)\n\n", 
-             total_memory_gb, used_memory_gb, used_percentage);
-}
-
-void print_gpu_info_to_buffer(char *buffer, size_t size) 
-{
-    GPUInfo gpu_info = get_gpu_info(); 
-
-   
-    snprintf(buffer + strlen(buffer), size - strlen(buffer), "GPU Info:\n");
-    snprintf(buffer + strlen(buffer), size - strlen(buffer), 
-             "   Name: %s\n   Usage: %.0f%%\n\n", 
-             gpu_info.name, gpu_info.usage);
 }
 
 static void print_help(void) 

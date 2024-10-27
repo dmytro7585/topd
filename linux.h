@@ -11,7 +11,8 @@ typedef struct
     float usages[32];      
 } CPUInfo;
 
-typedef struct {
+typedef struct 
+{
     long total_memory;    
     long used_memory;     
 } MemoryInfo;
@@ -53,16 +54,20 @@ typedef struct
     char upload[128];
 } InternetSpeedInfo;
 
-CPUInfo get_cpu_info();
-MemoryInfo get_memory_info();
-GPUInfo get_gpu_info();
+void get_cpu_info(CPUInfo * info);
 
+void get_memory_info(MemoryInfo * info);
 
+void get_gpu_info(GPUInfo * info);
 
 double get_system_uptime();
+
 OS_Info get_os_info();
+
 MonitorInfo get_monitor_info();
+
 DiskSpaceInfo get_disk_space_info(const char *path); 
+
 InternetSpeedInfo get_internet_speed_info();  
 
 #endif 
