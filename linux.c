@@ -3,195 +3,190 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdint.h>
+#include <stdbool.h>
 #include <sys/statvfs.h>
 
-int get_number_of_cores(void) 
+#define KB_TO_BYTES 1
+
+bool get_system_uptime(double *uptime_seconds) 
 {
-    long cores = sysconf(_SC_NPROCESSORS_ONLN);
-    return (int)cores;
-}
-
-float get_cpu_frequency(int core) 
-{
-    FILE *fp = fopen("/proc/cpuinfo", "r");
-    if (!fp) {
-        return -1.0;
-    }
-
-    char line[256];
-    char search_str[32];
-    snprintf(search_str, sizeof(search_str), "cpu MHz");
-
-    float frequency = -1.0;
-    int current_core = -1;
-
-    while (fgets(line, sizeof(line), fp)) {
-        if (strncmp(line, "processor", 9) == 0) {
-            current_core++;
-        }
-
-        if (current_core == core && strstr(line, search_str)) {
-            sscanf(line, "cpu MHz\t: %f", &frequency);
-            frequency /= 1000.0; 
-            break;
-        }
-    }
-
-    fclose(fp);
-    return frequency;
-}
-
-float get_cpu_usage(int core)
-{
-    FILE *fp = fopen("/proc/stat", "r");
-    if (!fp) {
-        return -1.0;
-    }
-
-    char line[256];
-    char search_str[32];
-    snprintf(search_str, sizeof(search_str), "cpu%d", core);
-
-    unsigned long long user, nice, system, idle, iowait, irq, softirq;
-    unsigned long long total_time = 0;
-    unsigned long long idle_time = 0;
-
-    while (fgets(line, sizeof(line), fp)) 
+    FILE *fp = fopen("/proc/uptime", "r");
+    if (fp == NULL) 
     {
-        if (strncmp(line, search_str, strlen(search_str)) == 0)
-         {
-            sscanf(line, "%*s %llu %llu %llu %llu %llu %llu %llu",
-                   &user, &nice, &system, &idle, &iowait, &irq, &softirq);
-
-            total_time = user + nice + system + idle + iowait + irq + softirq;
-            idle_time = idle + iowait;
-
-            break;
-        }
+        perror("Failed to open /proc/uptime");
+        return false; 
     }
 
+    if (fscanf(fp, "%lf", uptime_seconds) != 1) 
+    {
+        perror("Failed to read /proc/uptime");
+        fclose(fp);
+        return false; 
+    }
     fclose(fp);
 
-    if (total_time == 0) 
-    {
-        return -1.0;
-    }
-
-    static unsigned long long prev_total_time[32] = {0};
-    static unsigned long long prev_idle_time[32] = {0};
-
-    unsigned long long diff_total = total_time - prev_total_time[core];
-    unsigned long long diff_idle = idle_time - prev_idle_time[core];
-
-    prev_total_time[core] = total_time;
-    prev_idle_time[core] = idle_time;
-
-    return diff_total > 0 ? (100.0 * (diff_total - diff_idle) / diff_total) : 0.0;
+    return true;
 }
 
-int get_cpu_name(char *name, size_t length) 
+bool get_cpu_info(CPUInfo_t *info) 
 {
+    memset(info, 0, sizeof(CPUInfo_t));
+
     FILE *fp = fopen("/proc/cpuinfo", "r");
     if (!fp) 
     {
-        return -1;
+        perror("Error opening /proc/cpuinfo");
+        return false;
     }
 
     char line[256];
-    while (fgets(line, sizeof(line), fp)) {
-        if (strncmp(line, "model name", 10) == 0) {
+    while (fgets(line, sizeof(line), fp)) 
+    {
+        if (strncmp(line, "model name", 10) == 0) 
+        {
             char *colon = strchr(line, ':');
             if (colon) {
-                strncpy(name, colon + 2, length - 1);
-                name[length - 1] = '\0';
-                size_t len = strlen(name);
-                if (len > 0 && name[len - 1] == '\n') {
-                    name[len - 1] = '\0';
-                }
+                strncpy(info->name, colon + 2, sizeof(info->name) - 1);
+                info->name[strcspn(info->name, "\n")] = '\0'; 
             }
-            fclose(fp);
-            return 0;
+            break;
         }
     }
-
     fclose(fp);
-    return -1;
-}
 
-void get_cpu_info(CPUInfo * info)
-{
-    memset(info, 0, sizeof(CPUInfo));
-
-    if (get_cpu_name(info->name, sizeof(info->name)) != 0) 
-    {
-        fprintf(stderr, "Помилка при отриманні назви процесора\n");
-    }
-
-    info->num_cores = get_number_of_cores();
-    if (info->num_cores < 0) 
-    {
-        fprintf(stderr, "Помилка при отриманні кількості ядер процесора\n");
-    }
+    long cores = sysconf(_SC_NPROCESSORS_ONLN);
+    info->num_cores = (int)cores;
 
     for (int i = 0; i < info->num_cores; ++i) 
     {
-        info->frequencies[i] = get_cpu_frequency(i);
-        info->usages[i] = get_cpu_usage(i);
-
-        if (info->frequencies[i] < 0 || info->usages[i] < 0) 
+        fp = fopen("/proc/cpuinfo", "r");
+        if (!fp) 
         {
-            fprintf(stderr, "Помилка при отриманні інформації про ядро %d\n", i);
+            perror("Error opening /proc/cpuinfo");
+            return false;
         }
+
+        float frequency = -1.0;
+        int current_core = -1;
+        while (fgets(line, sizeof(line), fp)) 
+        {
+            if (strncmp(line, "processor", 9) == 0) 
+            {
+                current_core++;
+            }
+
+            if (current_core == i && strstr(line, "cpu MHz")) 
+            {
+                sscanf(line, "cpu MHz\t: %f", &frequency);
+                frequency /= 1000.0;  
+                break;
+            }
+        }
+        fclose(fp);
+
+        info->frequencies[i] = frequency;
+
+        fp = fopen("/proc/stat", "r");
+        if (!fp) 
+        {
+            perror("Error opening /proc/stat");
+            return false;
+        }
+
+        snprintf(line, sizeof(line), "cpu%d", i);
+        unsigned long long user, nice, system, idle, iowait, irq, softirq;
+        unsigned long long total_time = 0, idle_time = 0;
+        while (fgets(line, sizeof(line), fp)) 
+        {
+            if (strncmp(line, line, strlen(line)) == 0) 
+            {
+                sscanf(line, "%*s %llu %llu %llu %llu %llu %llu %llu",
+                       &user, &nice, &system, &idle, &iowait, &irq, &softirq);
+
+                total_time = user + nice + system + idle + iowait + irq + softirq;
+                idle_time = idle + iowait;
+                break;
+            }
+        }
+        fclose(fp);
+
+        static unsigned long long prev_total_time[32] = {0};
+        static unsigned long long prev_idle_time[32] = {0};
+
+        unsigned long long diff_total = total_time - prev_total_time[i];
+        unsigned long long diff_idle = idle_time - prev_idle_time[i];
+
+        prev_total_time[i] = total_time;
+        prev_idle_time[i] = idle_time;
+
+        info->usages[i] = diff_total > 0 ? (100.0 * (diff_total - diff_idle) / diff_total) : 0.0;
     }
+
+    return true;
 }
 
-void get_memory_info(MemoryInfo * info)
+bool get_memory_info(MemoryInfo_t * info)
 {
-    memset(info, 0, sizeof(MemoryInfo));
-
     FILE *file = fopen("/proc/meminfo", "r");
-    if (file == NULL) 
+
+    if (file == NULL || info == NULL)
     {
-        perror("Не вдалося відкрити /proc/meminfo");
+        perror("Failed to open /proc/meminfo");
+        return false;
     }
 
-    long mem_total = 0;
-    long mem_free = 0;
-    long buffers = 0;
-    long cached = 0;
+    memset(info, 0, sizeof(MemoryInfo_t));
 
     char line[256];
-    while (fgets(line, sizeof(line), file))
-     {
-        if (sscanf(line, "MemTotal: %ld kB", &mem_total) == 1 ||
-            sscanf(line, "MemFree: %ld kB", &mem_free) == 1 ||
-            sscanf(line, "Buffers: %ld kB", &buffers) == 1 ||
-            sscanf(line, "Cached: %ld kB", &cached) == 1) {
-            
+    bool total_found = false, free_found = false, buffers_found = false, cached_found = false;
+
+    while (fgets(line, sizeof(line), file)) 
+    {
+        if (!total_found && sscanf(line, "MemTotal: %d kB", &info->total_memory) == 1)
+        {
+            total_found = true;
+        } 
+        else if (!free_found && sscanf(line, "MemFree: %d kB", &info->mem_free) == 1)
+        {
+            free_found = true;
+        } 
+        else if (!buffers_found && sscanf(line, "Buffers: %d kB", &info->buffers) == 1) 
+        {
+            buffers_found = true;
+        } 
+        else if (!cached_found && sscanf(line, "Cached: %d kB", &info->cached) == 1) 
+        {
+            cached_found = true;
+        }
+        if (total_found && free_found && buffers_found && cached_found) 
+        {
+            break;
         }
     }
 
     fclose(file);
 
-    if (mem_total == 0)
-     {
-        fprintf(stderr, "Не вдалося знайти інформацію про загальну пам'ять\n");
+    if (!(total_found && free_found && buffers_found && cached_found)) 
+    {
+        fprintf(stderr, "Couldn't find all required memory information\n");
+        return false;
     }
 
-    info->total_memory = mem_total;  
-    info->used_memory = mem_total - mem_free - buffers - cached;  
+    info->used_memory = info->total_memory - info->mem_free - info->buffers - info->cached;
 
+    return true;
 }
 
-void get_gpu_info(GPUInfo *info)
+bool get_gpu_info(GPUInfo_t *info)
 {
-    memset(info, 0, sizeof(GPUInfo));
+    memset(info, 0, sizeof(GPUInfo_t));
 
     FILE *fp = popen("nvidia-smi --query-gpu=name,utilization.gpu --format=csv,noheader,nounits", "r");
-    if (fp == NULL) 
+    if (fp == NULL || info == NULL) 
     {
-        perror("Не вдалося запустити nvidia-smi");
-        return;  
+        perror("Can't open nvidia-smi");
+        return false; 
     }
 
     char buffer[256];
@@ -203,167 +198,158 @@ void get_gpu_info(GPUInfo *info)
 
         if (sscanf(utilization, "%f", &info->usage) != 1)
         {
-            fprintf(stderr, "Не вдалося зчитати використання GPU\n");
+            perror("Can't read info about the GPU\n");
+            return false;
         }
     } 
     else 
     {
-        fprintf(stderr, "Не вдалося отримати інформацію про GPU\n");
+        perror("Can't get info about the GPU\n");
+        return false;
     }
 
     pclose(fp);
+    return true;
 }
 
-double get_system_uptime() 
+bool get_os_info(OS_Info_t *info)
 {
-    FILE *fp = fopen("/proc/uptime", "r");
-    if (fp == NULL) {
-        perror("Не вдалося відкрити /proc/uptime");
-        return -1.0; 
-    }
+    memset(info, 0, sizeof(OS_Info_t));
 
-  
-    double uptime_seconds;
-    if (fscanf(fp, "%lf", &uptime_seconds) != 1) {
-        fprintf(stderr, "Не вдалося зчитати аптайм з /proc/uptime\n");
-        fclose(fp);
-        return -1.0; 
-    }
-    fclose(fp);
-
-    return uptime_seconds;
-}
-
-OS_Info get_os_info() 
-{
-    OS_Info os_info = {"Невідомо", "Невідомо", "Невідомо", "Невідомо"};  
-
-   
     FILE *fp = fopen("/etc/os-release", "r");
-    if (fp == NULL) {
-        perror("Не вдалося відкрити /etc/os-release");
-        return os_info;
+    if (fp == NULL || info == NULL) 
+    {
+        perror("Can't open /etc/os-release");
+        return false;
     }
 
     char line[256];
-    while (fgets(line, sizeof(line), fp) != NULL) {
-        if (strncmp(line, "NAME=", 5) == 0) {
-            sscanf(line, "NAME=\"%[^\"]\"", os_info.os_name);
-        } else if (strncmp(line, "VERSION=", 8) == 0) {
-            sscanf(line, "VERSION=\"%[^\"]\"", os_info.os_version);
+    while (fgets(line, sizeof(line), fp) != NULL) 
+    {
+        if (strncmp(line, "NAME=", 5) == 0) 
+        {
+            sscanf(line, "NAME=\"%[^\"]\"", info->os_name);
+        } 
+        else if (strncmp(line, "VERSION=", 8) == 0) 
+        {
+            sscanf(line, "VERSION=\"%[^\"]\"", info->os_version);
         }
     }
 
     fclose(fp);
 
-    
     fp = popen("uname -r", "r");
-    if (fp == NULL) {
-        perror("Не вдалося виконати uname -r");
-        return os_info;
+    if (fp == NULL) 
+    {
+        perror("Failed to execute uname -r");
+        return false;
     }
 
-    if (fgets(os_info.kernel_version, sizeof(os_info.kernel_version), fp) == NULL) {
-        fprintf(stderr, "Не вдалося отримати версію ядра\n");
+    if (fgets(info->kernel_version, sizeof(info->kernel_version), fp) == NULL) 
+    {
+        fprintf(stderr, "Can't get info about the kernel version\n");
         pclose(fp);
-        return os_info;
+        return false;
     }
 
-    
-    os_info.kernel_version[strcspn(os_info.kernel_version, "\n")] = 0;
+    info->kernel_version[strcspn(info->kernel_version, "\n")] = 0;
 
     pclose(fp);
 
-    
     char *default_shell = getenv("SHELL");
-    if (default_shell != NULL) {
-        strncpy(os_info.default_shell, default_shell, sizeof(os_info.default_shell) - 1);
+    if (default_shell != NULL) 
+    {
+        strncpy(info->default_shell, default_shell, sizeof(info->default_shell) - 1);
     }
-
-    return os_info;
+    return true;
 }
 
-MonitorInfo get_monitor_info() 
+bool get_monitor_info(MonitorInfo_t *info)
 {
-    MonitorInfo monitor_info = {"Unknown", 0, 0}; 
+    memset(info, 0, sizeof(MonitorInfo_t));
 
-   
     FILE *fp = popen("xrandr --current | grep ' connected'", "r");
-    if (fp == NULL) {
-        perror("Не вдалося виконати xrandr");
-        return monitor_info;
+    if (fp == NULL) 
+    {
+        perror("Failed to open xrandr");
+        return false;
     }
 
     char line[256];
 
-    
-    if (fgets(line, sizeof(line), fp) != NULL) {
-        sscanf(line, "%127s connected %dx%d", monitor_info.monitor_name, &monitor_info.width, &monitor_info.height);
-    } else {
-        fprintf(stderr, "Не вдалося отримати інформацію про монітор\n");
+    if (fgets(line, sizeof(line), fp) != NULL) 
+    {
+        sscanf(line, "%127s connected %*s %dx%d", info->monitor_name, &(info->width), &(info->height));
+
+    }
+    else 
+    {
+        perror("Failed to get monitor info!\n");
         pclose(fp);
-        return monitor_info;
+        return false;
     }
 
     pclose(fp);
     
-    return monitor_info;
+    return true;
 }
 
-DiskSpaceInfo get_disk_space_info(const char *path) 
+bool get_disk_space_info(DiskSpaceInfo_t *info, const char *path)
 {
-    DiskSpaceInfo disk_info = {0};  
+    memset(info, 0, sizeof(DiskSpaceInfo_t));
 
     struct statvfs stat;
 
-    
-    if (statvfs(path, &stat) != 0) {
-        perror("Не вдалося отримати інформацію про файлову систему");
-        return disk_info;  
+    if (statvfs(path, &stat) != 0) 
+    {
+        perror("Failed to get file system information");
+        return false;  
     }
-
    
     unsigned long long total_space = stat.f_blocks * stat.f_frsize;
     unsigned long long free_space = stat.f_bfree * stat.f_frsize;
     unsigned long long used_space = total_space - free_space;
 
-    
-    disk_info.total_gb = (double)total_space / (1024 * 1024 * 1024);
-    disk_info.free_gb = (double)free_space / (1024 * 1024 * 1024);
-    disk_info.used_gb = (double)used_space / (1024 * 1024 * 1024);
-    disk_info.used_percent = (double)used_space / total_space * 100;
+    info->total_gb = (double)total_space / (1024 * 1024 * 1024);
+    info->free_gb = (double)free_space / (1024 * 1024 * 1024);
+    info->used_gb = (double)used_space / (1024 * 1024 * 1024);
+    info->used_percent = (double)used_space / total_space * 100;
 
-    
-    strncpy(disk_info.path, path, sizeof(disk_info.path) - 1);
+    strncpy(info->path, path, sizeof(info->path) - 1);
 
-    return disk_info;  
-}
+    return true;  
+} 
 
-InternetSpeedInfo get_internet_speed_info() 
+bool get_internet_speed_info(InternetSpeedInfo_t *info)
 {
-    InternetSpeedInfo speed_info = {"N/A", "N/A", "N/A"};  
+    memset(info, 0, sizeof(InternetSpeedInfo_t));
 
-    
     FILE *fp = popen("speedtest-cli --simple", "r");
-    if (fp == NULL) {
-        perror("Не вдалося виконати speedtest-cli");
-        return speed_info; 
+    if (fp == NULL) 
+    {
+        perror("Failed to execute speedtest-cli");
+        return false; 
     }
 
     char line[256];
 
-    
-    while (fgets(line, sizeof(line), fp) != NULL) {
-        if (strncmp(line, "Ping:", 5) == 0) {
-            sscanf(line, "Ping: %[^\n]", speed_info.ping);
-        } else if (strncmp(line, "Download:", 9) == 0) {
-            sscanf(line, "Download: %[^\n]", speed_info.download);
-        } else if (strncmp(line, "Upload:", 7) == 0) {
-            sscanf(line, "Upload: %[^\n]", speed_info.upload);
+    while (fgets(line, sizeof(line), fp) != NULL) 
+    {
+        if (strncmp(line, "Ping:", 5) == 0) 
+        {
+            sscanf(line, "Ping: %[^\n]", info->ping);
+        } 
+        else if (strncmp(line, "Download:", 9) == 0) 
+        {
+            sscanf(line, "Download: %[^\n]", info->download);
+        } 
+        else if (strncmp(line, "Upload:", 7) == 0) 
+        {
+            sscanf(line, "Upload: %[^\n]", info->upload);
         }
     }
 
     pclose(fp);
 
-    return speed_info;  
+    return true;  
 }

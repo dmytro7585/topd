@@ -5,6 +5,7 @@ Simple Unix daemon that logs system information to a file.
 ```
 GCC
 CMake
+speedtest-cli 
 ``` 
 ### Build & Run instructions.
 

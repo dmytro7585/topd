@@ -19,7 +19,7 @@ void log_to_file(const char *message)
     FILE *fp = fopen(LOG_FILE, "w");  
     if (fp == NULL) 
     {
-        perror("Не вдалося відкрити файл для запису");
+        perror("Could not open file for writing");
         return;
     }
     fprintf(fp, "%s", message);
@@ -34,7 +34,7 @@ void create_daemon()
         pid_t existing_pid;
         if (fscanf(pid_file, "%d", &existing_pid) != 1) 
         {
-            fprintf(stderr, "Не вдалося прочитати PID з файлу\n");
+            fprintf(stderr, "Failed to read PID from file\n");
             fclose(pid_file);
             exit(EXIT_FAILURE);
         }
@@ -42,7 +42,7 @@ void create_daemon()
 
         if (kill(existing_pid, 0) == 0) 
         {
-            fprintf(stderr, "Демон вже працює (PID: %d)\n", existing_pid);
+            fprintf(stderr, "The daemon is already running (PID: %d)\n", existing_pid);
             exit(EXIT_FAILURE);
         } 
         else 
@@ -82,9 +82,24 @@ void print_current_datetime(char *buffer, size_t size)
     snprintf(buffer + strlen(buffer), size - strlen(buffer), "%s[%s]\n\n", time_buffer, timezone);
 }
 
+void print_system_uptime(char *buffer, size_t size) 
+{
+    double uptime_seconds;
+    if (!get_system_uptime(&uptime_seconds)) 
+    {
+        snprintf(buffer + strlen(buffer), size - strlen(buffer), "Failed to get uptime info\n");
+    }
+
+    int hours = (int)(uptime_seconds / 3600);
+    int minutes = (int)((uptime_seconds - (hours * 3600)) / 60);
+    int seconds = (int)(uptime_seconds - (hours * 3600) - (minutes * 60));
+
+    snprintf(buffer + strlen(buffer), size - strlen(buffer), "System Uptime: %02d:%02d:%02d\n\n", hours, minutes, seconds);
+}
+
 void print_cpu_info(char *buffer, size_t size) 
 {
-    CPUInfo cpu_info;
+    CPUInfo_t cpu_info;
     get_cpu_info(&cpu_info);  
 
     snprintf(buffer + strlen(buffer), size - strlen(buffer), "CPU Info:\n%s\nCores(%d):\n", 
@@ -101,7 +116,7 @@ void print_cpu_info(char *buffer, size_t size)
 
 void print_memory_info(char *buffer, size_t size) 
 {
-    MemoryInfo memory_info;
+    MemoryInfo_t memory_info;
     get_memory_info(&memory_info);
 
     double total_memory_gb = memory_info.total_memory / (1024.0 * 1024.0);
@@ -117,7 +132,7 @@ void print_memory_info(char *buffer, size_t size)
 
 void print_gpu_info_to_buffer(char *buffer, size_t size) 
 {
-    GPUInfo gpu_info; 
+    GPUInfo_t gpu_info; 
     get_gpu_info(&gpu_info);
 
     snprintf(buffer + strlen(buffer), size - strlen(buffer), "GPU Info:\n");
@@ -126,71 +141,62 @@ void print_gpu_info_to_buffer(char *buffer, size_t size)
              gpu_info.name, gpu_info.usage);
 }
 
-
-void print_system_uptime(char *buffer, size_t size) 
-{
-    double uptime_seconds = get_system_uptime();
-    
-    if (uptime_seconds < 0) {
-        return;
-    }
-
-    int hours = (int)(uptime_seconds / 3600);
-    int minutes = (int)((uptime_seconds - (hours * 3600)) / 60);
-    int seconds = (int)(uptime_seconds - (hours * 3600) - (minutes * 60));
-
-
-    snprintf(buffer + strlen(buffer), size - strlen(buffer), "System Uptime: %02d:%02d:%02d\n", hours, minutes, seconds);
-}
-
 void print_os_info(char *buffer, size_t size)
  {
-    OS_Info os_info = get_os_info();
+    OS_Info_t os_info;
+    get_os_info(&os_info);
 
-    
     snprintf(buffer + strlen(buffer), size - strlen(buffer), "OS: %s %s\nKernel version: %s\nShell: %s\n\n",
              os_info.os_name, os_info.os_version, os_info.kernel_version, os_info.default_shell);
 }
 
 void print_monitor_info(char *buffer, size_t size) 
 {
-    MonitorInfo monitor_info = get_monitor_info(); 
+    MonitorInfo_t monitor_info;
+    get_monitor_info(&monitor_info);
 
-    
-    if (monitor_info.width > 0 && monitor_info.height > 0) {
-        snprintf(buffer + strlen(buffer), size - strlen(buffer), "Display: %s\nResolution: %dx%d\n\n",
-                 monitor_info.monitor_name, monitor_info.width, monitor_info.height);
-    } else {
+    if (monitor_info.width > 0 && monitor_info.height > 0) 
+    {
+        snprintf(buffer + strlen(buffer), size - strlen(buffer), "Display: %s\nResolution: %dx%d\n\n", monitor_info.monitor_name, monitor_info.width, monitor_info.height);
+    } 
+    else 
+    {
         snprintf(buffer + strlen(buffer), size - strlen(buffer), "Display: %s (resolution is not defined)\n\n", monitor_info.monitor_name);
     }
 }
 
 void print_disk_space_info(char *buffer, size_t size, const char *path) 
 {
-    DiskSpaceInfo disk_info = get_disk_space_info(path);  
+    DiskSpaceInfo_t disk_info;
+    
+    if (!get_disk_space_info(&disk_info, path)) 
+    {
+        snprintf(buffer + strlen(buffer), size - strlen(buffer), "Failed to retrieve disk information for path: %s\n\n", path);
+        return;
+    }
 
-   
     snprintf(buffer + strlen(buffer), size - strlen(buffer), "Disk (%s):\nTotal: %.2f GB\nUsed: %.2f GB (%.2f%%)\nFree: %.2f GB\n\n",
              disk_info.path, disk_info.total_gb, disk_info.used_gb, disk_info.used_percent, disk_info.free_gb);
 }
 
 void print_internet_speed(char *buffer, size_t size)
 {
-    InternetSpeedInfo speed_info = get_internet_speed_info();  
+    InternetSpeedInfo_t speed_info;
+    get_internet_speed_info(&speed_info);
 
-    
     snprintf(buffer + strlen(buffer), size - strlen(buffer), "Internet Speed:\nPing: %s\nDownload: %s\nUpload: %s\n\n",
              speed_info.ping, speed_info.download, speed_info.upload);
 }
 
-static void print_help(void) 
+void print_help(void) 
 {
     printf
     (
-        "Usage: ./topd [-htcrgomdi]\n"
+        "Usage: ./topd [-htucrgomdi]\n"
         "Options:\n"
         "  -h          Show this help message\n"
         "  -t          Show time\n"
+        "  -u          Show uptime\n"
         "  -c          Show info about the CPU\n"
         "  -r          Show info about the RAM\n"
         "  -g          Show info about the GPU\n"
@@ -203,76 +209,114 @@ static void print_help(void)
 
 int main(int argc, char *argv[]) 
 {
+    int opt;
+
+    while ((opt = getopt(argc, argv, "htucrgomdi")) != -1) 
+    {
+        switch(opt)
+        {
+            case 'h':
+                print_help();
+                exit(EXIT_SUCCESS);
+            case 't':
+                options_t.show_time = true; 
+                break;
+            case 'u':
+                options_t.show_uptime = true;
+                break;
+            case 'c':
+                options_t.show_CPU = true;
+                break;
+            case 'r':
+                options_t.show_RAM = true;
+                break;
+            case 'g':
+                options_t.show_GPU = true;
+                break;
+            case 'o':
+                options_t.show_OS = true;
+                break;
+            case 'm':
+                options_t.show_monitor = true;
+                break;
+            case 'd':
+                options_t.show_disk = true;
+                break;    
+            case 'i':
+                options_t.show_speed_internet = true;
+                break;
+            default:
+                fprintf(stderr, "Unknown command. \n");
+                exit(EXIT_FAILURE);
+            }
+    }
+
     create_daemon();
 
     char log_message[2048] = ""; 
 
-while (1) 
-   {
+    while (1) 
+    {
         log_message[0] = '\0';
 
-    if (argc < 2) 
-    {
-        fprintf(stderr, "Default mode. Use ''./topd -h'' for help.\n");
-        print_cpu_info(log_message, sizeof(log_message));
-        print_gpu_info_to_buffer(log_message, sizeof(log_message));
-    }
+        if (argc < 2) 
+        {
+            fprintf(stderr, "Default mode. Use ''./topd -h'' for help.\n");
+            print_cpu_info(log_message, sizeof(log_message));
+            print_gpu_info_to_buffer(log_message, sizeof(log_message));
+        }
 
-    for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "-t") == 0) 
+        if (options_t.show_time) 
         {
             print_current_datetime(log_message, sizeof(log_message));
-        } 
+        }
 
-        else if (strcmp(argv[i], "-c") == 0)
+        if (options_t.show_uptime) 
+        {
+            print_system_uptime(log_message, sizeof(log_message));
+        }
+
+        if (options_t.show_CPU) 
         {
             print_cpu_info(log_message, sizeof(log_message));
-        } 
+        }
 
-        else if (strcmp(argv[i], "-r") == 0)
+        if (options_t.show_RAM) 
         {
             print_memory_info(log_message, sizeof(log_message));
-        } 
+        }
 
-        else if (strcmp(argv[i], "-g") == 0)
+        if (options_t.show_GPU) 
         {
             print_gpu_info_to_buffer(log_message, sizeof(log_message));
-        } 
+        }
 
-        else if (strcmp(argv[i], "-o") == 0)
+        if (options_t.show_OS) 
         {
             print_os_info(log_message, sizeof(log_message));
-        } 
+        }
 
-        else if (strcmp(argv[i], "-m") == 0)
+        if (options_t.show_monitor) 
         {
             print_monitor_info(log_message, sizeof(log_message));
-        } 
-        else if (strcmp(argv[i], "-d") == 0) 
+        }
+
+        if (options_t.show_disk) 
         {
             print_disk_space_info(log_message, sizeof(log_message), "/");
-        } 
-        else if (strcmp(argv[i], "-i") == 0)
+        }
+
+        if (options_t.show_speed_internet) 
         {
             print_internet_speed(log_message, sizeof(log_message));
-        } 
-        else if (strcmp(argv[i], "-h") == 0)
-        {
-            print_help();
-        } 
-        else 
-        {
-            fprintf(stderr, "Unknown command: %s\n", argv[i]);
-            print_help();
-            return 1;
         }
-    }
-    
+        
         log_to_file(log_message);
-
         sleep(3);
+        
     }
 
     return 0;
 }
+
 
